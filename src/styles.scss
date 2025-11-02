@@ -1,1 +1,10 @@
-/* You can add global styles to this file, and also import other style files */
+@import "@arcgis/core/assets/esri/themes/light/main.css";
+@import "@esri/calcite-components/calcite/calcite.css";
+// @import "@arcgis/map-components/main.css";
+// @import "@arcgis/coding-components/main.css";
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
