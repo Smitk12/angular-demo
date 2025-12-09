@@ -1,0 +1,17 @@
+<div class="toolbar">
+<button (click)="startPolyline()">Polyline</button>
+<button (click)="startPolygon()">Polygon</button>
+ 
+  <button (click)="enableEdit()">Edit</button>
+<span class="spacer"></span>
+ 
+  <button (click)="undo()">Undo</button>
+<button (click)="redo()">Redo</button>
+<button (click)="finish()">Finish</button>
+<button (click)="cancel()">Cancel</button>
+<button (click)="clear()">Clear</button>
+<button (click)="delete()">Delete</button>
+</div>
+ 
+<div #mapView class="map-view"></div>
+ 

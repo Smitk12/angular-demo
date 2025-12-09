@@ -7,11 +7,11 @@ import Map from '@arcgis/core/Map';
 import MapView from '@arcgis/core/views/MapView';
 import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import Sketch from '@arcgis/core/widgets/Sketch';
-import Expand from '@arcgis/core/widgets/Expand';
 import Point from '@arcgis/core/geometry/Point';
 import Polyline from '@arcgis/core/geometry/Polyline';
 import Polygon from '@arcgis/core/geometry/Polygon';
 import Graphic from '@arcgis/core/Graphic';
+import TextSymbol from '@arcgis/core/symbols/TextSymbol';
 
 @Component({
   selector: 'app-arc-gis',
@@ -23,9 +23,8 @@ import Graphic from '@arcgis/core/Graphic';
 export class ArcGis implements OnInit, OnDestroy {
   @ViewChild('mapViewNode', { static: true }) private mapViewEl!: ElementRef;
   private view!: MapView;
-  private graphicsLayer!: GraphicsLayer;
-
-  private uidCounter = 1;
+  private graphicsLayer = new GraphicsLayer({ title: 'Graphic Polygons' });
+  private labelLayer = new GraphicsLayer({ title: 'Vertex Numbers' });
 
   async ngOnInit() {
     try {
@@ -54,47 +53,67 @@ export class ArcGis implements OnInit, OnDestroy {
         availableCreateTools: ['point', 'polyline', 'polygon'],
       });
 
-      sketch.viewModel.vertexSymbol = {
-        type: 'text',
-        text: `${this.uidCounter}`,
-        color: [226, 119, 40],
-        haloColor: 'white',
-        haloSize: 2,
-        font: { size: 12, weight: 'bold' }
-      };
+      this.view.ui.add(sketch, 'top-right');
 
-      const sketchExpand = new Expand({
-        view: this.view,
-        content: sketch,
-        expandIcon: 'pencil',
-        expanded: true,
-      });
+      // await this.loadSavedSketches();
 
-      this.view.ui.add(sketchExpand, 'top-right');
-      await this.loadSavedSketches();
-
-      sketch.on('create', (event: any) => {
-        if (event.state === 'complete' && event.graphic && event.graphic.geometry) {
-          const geom = event.graphic.geometry;
-          if (geom.type === 'polyline' || geom.type === 'polygon') {
-          }
+      sketch.on('create', (evt: { tool: string; state: string; graphic: { geometry: Polygon; }; }) => {
+        if (evt.tool !== 'polygon') return;
+        if (evt.state === 'start' || evt.state === 'active') {
+          this.updateVertexLabels(evt.graphic.geometry as Polygon);
+        }
+        if (evt.state === 'complete') {
+          this.updateVertexLabels(evt.graphic.geometry as Polygon);
         }
       });
 
-      sketch.on('update', (event: any) => {
-        const g = event.graphics && event.graphics[0] ? event.graphics[0] : event.graphic;
-        if (event.state === 'complete' && g && g.geometry) {
-          if (g.geometry.type === 'polyline' || g.geometry.type === 'polygon') {
-          }
-        }
-      });
+      sketch.on('update', (evt: { graphics: string | any[]; state: string; }) => {
+        if (!evt.graphics?.length) return;
+        const g = evt.graphics[0];
+        const geom = g.geometry as Polygon;
 
-      this.graphicsLayer.watch('graphics.length', () => {
+        this.raf(() => this.updateVertexLabels(geom));
+
+        if (evt.state === 'complete') {
+          this.updateVertexLabels(geom);
+        }
       });
 
     } catch (error) {
       console.error('Error creating editable map:', error);
     }
+  }
+
+  private updateVertexLabels(poly: Polygon | null | undefined) {
+    this.labelLayer.removeAll();
+    if (!poly || poly.type !== 'polygon') return;
+
+    const sr = poly.spatialReference;
+    let idx = 1;
+
+    poly.rings.forEach((ring) => {
+      if (!ring?.length) return;
+
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      const isClosedDup = first[0] === last[0] && first[1] === last[1];
+      const len = isClosedDup ? ring.length - 1 : ring.length;
+
+      for (let i = 0; i < len; i++) {
+        const [x, y] = ring[i];
+        const pt = new Point({ x, y, spatialReference: sr });
+
+        const sym = new TextSymbol({
+          text: String(idx++),
+          font: { size: 10, family: 'monospace', weight: 'bold' },
+          haloColor: 'white',
+          haloSize: 2,
+          yoffset: -10
+        });
+
+        this.labelLayer.add(new Graphic({ geometry: pt, symbol: sym }));
+      }
+    });
   }
 
   saveMap() {
@@ -193,6 +212,16 @@ export class ArcGis implements OnInit, OnDestroy {
       default:
         return null;
     }
+  }
+
+  private pending = false;
+  private raf(fn: () => void) {
+    if (this.pending) return;
+    this.pending = true;
+    requestAnimationFrame(() => {
+      this.pending = false;
+      fn();
+    });
   }
 
   clearMap() {
